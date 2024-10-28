@@ -1,0 +1,6 @@
+def authenticate_gdrive():
+    SCOPES = ['https://www.googleapis.com/auth/drive.file']
+    SERVICE_ACCOUNT_FILE = 'C:/path/to/your/credentials.json'  # Change this to the absolute path
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    return build('drive', 'v3', credentials=credentials)
