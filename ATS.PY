@@ -220,51 +220,58 @@ if st.session_state.user is not None:
                     st.error(f"Error processing file: {e}")
 
     elif upload_option == "Bulk Resume Upload":
-        uploaded_files = st.file_uploader("Choose files (PDF or DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
-        if uploaded_files:
-            extracted_data_list = []
-            for uploaded_file in uploaded_files:
-                if uploaded_file.size > 5 * 1024 * 1024:  # 5 MB limit
-                    st.error(f"{uploaded_file.name} exceeds the 5MB limit!", icon="🚨")
+        folder_path = st.text_input("Enter the folder path:")
+        if st.button("Upload"):
+            uploaded_files = os.listdir(folder_path)
+            bulk_data = []
+
+            for file_name in uploaded_files:
+                file_path = os.path.join(folder_path, file_name)
+                if file_name.endswith('.pdf'):
+                    with open(file_path, "rb") as f:
+                        resume_text = input_pdf_text(f)
+                elif file_name.endswith('.docx'):
+                    resume_text = input_docx_text(file_path)
                 else:
-                    try:
-                        text = ""
-                        if uploaded_file.type == 'application/pdf':
-                            text = input_pdf_text(uploaded_file)
-                        elif uploaded_file.type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                            text = input_docx_text(uploaded_file)
+                    continue
 
-                        if text:
-                            extracted_data = extract_details_from_resume(text)
-                            temp_file_path = f'temp/{uploaded_file.name}'
-                            os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
-                            with open(temp_file_path, "wb") as f:
-                                f.write(uploaded_file.getbuffer())
+                extracted_data = extract_details_from_resume(resume_text)
 
-                            drive_url = upload_file_to_google_drive(temp_file_path, uploaded_file.name)
-                            extracted_data['Resume URL'] = drive_url
-                            
-                            # Insert data into the database
-                            insert_resume_data(
-                                extracted_data['Name'],
-                                extracted_data['Phone Number'],
-                                extracted_data['Email ID'],
-                                extracted_data['Job Title'],
-                                extracted_data['Skills'],
-                                extracted_data['Location'],
-                                extracted_data['Resume URL']
-                            )
-                            
-                            extracted_data_list.append(extracted_data)
-                    except Exception as e:
-                        st.error(f"Error processing {uploaded_file.name}: {e}")
+                # Upload to Google Drive and get the URL
+                resume_url = upload_file_to_google_drive(file_path, file_name)
 
-            if extracted_data_list:
-                st.dataframe(pd.DataFrame(extracted_data_list))
-                if st.button("Save All Data to Excel"):
-                    save_full_data_to_excel(extracted_data_list, "extracted_data.xlsx")
-                    st.success("All data saved to Excel.")
+                # Insert into the database
+                insert_resume_data(
+                    extracted_data['Name'],
+                    extracted_data['Phone Number'],
+                    extracted_data['Email ID'],
+                    extracted_data['Job Title'],
+                    extracted_data['Skills'],
+                    extracted_data['Location'],
+                    resume_url
+                )
 
+                bulk_data.append({
+                    'Name': extracted_data['Name'],
+                    'Phone Number': extracted_data['Phone Number'],
+                    'Email ID': extracted_data['Email ID'],
+                    'Job Title': extracted_data['Job Title'],
+                    'Skills': extracted_data['Skills'],
+                    'Location': extracted_data['Location'],
+                    'Resume URL': resume_url,
+                })
+
+            # Display the uploaded resumes data in a table
+            st.subheader("Uploaded Resumes Data")
+            st.dataframe(bulk_data)
+
+            # Save to Excel
+            excel_filename = "bulk_resumes.xlsx"
+            save_full_data_to_excel(bulk_data, excel_filename)
+            with open(excel_filename, "rb") as file:
+                st.download_button(label="Download Bulk Upload Data as Excel", data=file, file_name=excel_filename)
+
+# Search resumes sec
     # Search section
     st.subheader('Search Resumes')
     search_query = st.text_input("Enter search query:")
